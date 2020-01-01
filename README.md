@@ -28,6 +28,15 @@ Arabic -> ar
 
 English -> en
 
+### Example usage:
+```
+auto label = Label::createWithTTF(
+    PersianLanguageSupport::getInstance()->translateAndNormalize("text1"), 
+    "fonts/BYekan.ttf", 
+    20
+);
+```
+
 ## Current bugs
 
 Because I don't understand Arabic , if you are willing to fix its Arabic support please contact me to guide you or submit your fix pull request. 
