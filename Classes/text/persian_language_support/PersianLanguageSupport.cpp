@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <stack>
 #include "text/localization/Localization.h"
+#include <ccTypes.h>
 
 PersianLanguageSupport* PersianLanguageSupport::instance;
 
@@ -85,30 +86,93 @@ std::string PersianLanguageSupport::normalizeText(const std::string& rawText) {
 	if (parsedText.length() <= 0) {
 		return parsedText;
 	}
-	//bool isRtl = isPersian(parsedText);
-	auto words = CommonOperators::split(parsedText, ' ');
-	if (words.size() == 0) {
-		return parsedText;
+	std::vector<std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>> words;
+	{//Creating words
+		auto parsedTextUtf8String = cocos2d::StringUtils::StringUTF8(parsedText);
+		if (parsedTextUtf8String.length() == 0) {
+			return parsedText;
+		}
+		bool isPersian = false;
+		bool isPreviousPersian = false;
+		bool isPreviousEnglish = false;
+		for (auto character : parsedTextUtf8String.getString()) {
+			if (
+				character._char=="\n" || 
+				(
+					character.isASCII()==true && 
+					std::ispunct(character._char[0])
+				)
+			) {
+				auto newWord = std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>();
+				newWord.emplace_back(character);
+				words.emplace_back(newWord);
+				isPreviousPersian = false;
+				isPreviousEnglish = false;
+			}
+			else {
+				isPersian = singleChars[character._char] != "";
+				if (isPersian) {
+					isPreviousEnglish = false;
+					if (isPreviousPersian == true) {
+						words.at(words.size() - 1).emplace_back(character);
+					}
+					else {
+						isPreviousPersian = true;
+						auto newWord = std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>();
+						newWord.emplace_back(character);
+						words.emplace_back(newWord);
+					}
+				}
+				else {
+					isPreviousPersian = false;
+					if (isPreviousEnglish == true) {
+						words.at(words.size() - 1).emplace_back(character);
+					}
+					else {
+						isPreviousEnglish = true;
+						auto newWord = std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>();
+						newWord.emplace_back(character);
+						words.emplace_back(newWord);
+					}
+				}
+			}
+		}
 	}
 	parsedText = "";
-	std::stack<std::string> persianWordBuffer;
-	for (const auto& word : words) {
-		if (isPersian(word)) {
-			persianWordBuffer.push(word);
-		}
-		else {
-			while (persianWordBuffer.size()>0)
+	{//Normalizing and connecting words to create normalized text
+		std::stack<std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>> persianWordBuffer;
+		for (const auto& word : words) {
+			if (word.at(0)._char[0] == '\n')
 			{
-				parsedText += normalizeWord(persianWordBuffer.top()) + ' ';
-				persianWordBuffer.pop();
+				parsedText += emptyWordBuffer(persianWordBuffer);
+				parsedText += convertUtf8CharacterVectorToString(word);
 			}
-			parsedText += word + ' ';
+			else 
+			if (
+				word.size() == 1 &&
+				word.at(0).isASCII() == true
+				) {
+				if (
+					std::ispunct(word.at(0)._char[0]) ||
+					std::isspace(word.at(0)._char[0])
+				) {
+					if (persianWordBuffer.size() == 0) {
+						parsedText += convertUtf8CharacterVectorToString(word);
+					}
+					else {
+						persianWordBuffer.push(word);
+					}
+				}
+			}
+			else if (isPersian(word)) {
+				persianWordBuffer.push(word);
+			}
+			else {
+				parsedText += emptyWordBuffer(persianWordBuffer);
+				parsedText += convertUtf8CharacterVectorToString(word);
+			}
 		}
-	}
-	while (persianWordBuffer.size() > 0)
-	{
-		parsedText += normalizeWord(persianWordBuffer.top()) + ' ';
-		persianWordBuffer.pop();
+		parsedText += emptyWordBuffer(persianWordBuffer);
 	}
 	return parsedText;
 }
@@ -118,65 +182,85 @@ std::string PersianLanguageSupport::translateAndNormalize(const std::string& tex
 	return normalizeText(Localization::getInstance()->translate(textKey));
 }
 
-bool PersianLanguageSupport::isPersian(const std::string& text) {
-	cocos2d::StringUtils::StringUTF8 utf8Text = text;
-	auto firstChar = (utf8Text.getString().at(0)._char);
-	auto foundChar = singleChars[firstChar];
-	return foundChar!= "";
+bool PersianLanguageSupport::isPersian(const std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>& utf8Text) {
+	return singleChars[utf8Text.at(0)._char]!= "";
 }
 
-std::string PersianLanguageSupport::normalizeWord(const std::string& rawWord) {
-	assert(rawWord.length() > 0);
-	if (isPersian(rawWord)==false) {
-		return rawWord;
-	}
-	cocos2d::StringUtils::StringUTF8 utf8RawWord = rawWord ;
-	auto wordVector = utf8RawWord.getString();
+std::string PersianLanguageSupport::normalizeWord(const std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>& wordVector) {
+	assert(wordVector.size() > 0);
 	std::string parsedWord = "";
-	std::string foundCharacter;
-	bool isPreviousCharacterABreakerChar;
-	size_t i = 0;
-	for (auto vectorPosition = 0; vectorPosition < wordVector.size(); vectorPosition++) {
-		i = wordVector.size() - vectorPosition - 1;
-		if (i == 0) {
-			foundCharacter = startChars[wordVector[i]._char];
-			if (foundCharacter != "") {
-				parsedWord += foundCharacter;
-			}
-			else
-			{
-				parsedWord += wordVector[i]._char;
-			}
-		}
-		else
-		{
-			isPreviousCharacterABreakerChar = connectionBreakerChars[wordVector[i - 1]._char] == true;
-			if (isPreviousCharacterABreakerChar) {
-				if (i == wordVector.size() - 1) {
-					foundCharacter = singleChars[wordVector[i]._char];
+	if (isPersian(wordVector) == false) {
+		parsedWord += convertUtf8CharacterVectorToString(wordVector);
+	}
+	else
+	{
+		std::string foundCharacter;
+		bool isPreviousCharacterABreakerChar;
+		size_t i = 0;
+		for (size_t vectorPosition = 0; vectorPosition < wordVector.size(); vectorPosition++) {
+			i = wordVector.size() - vectorPosition - 1;
+			if (i == 0) {
+				foundCharacter = startChars[wordVector[i]._char];
+				if (foundCharacter != "") {
+					parsedWord += foundCharacter;
 				}
-				else {
-					foundCharacter = startChars[wordVector[i]._char];
-				}
-			}
-			else
-			{
-				if (i == wordVector.size() - 1)
+				else
 				{
-					foundCharacter = endChars[wordVector[i]._char];
+					parsedWord += wordVector[i]._char;
 				}
-				else {
-					foundCharacter = middleChars[wordVector[i]._char];
-				}
-			}
-			if (foundCharacter != "") {
-				parsedWord += foundCharacter;
 			}
 			else
 			{
-				parsedWord += wordVector[i]._char;
+				isPreviousCharacterABreakerChar = connectionBreakerChars[wordVector[i - 1]._char] == true;
+				if (isPreviousCharacterABreakerChar) {
+					if (i == wordVector.size() - 1) {
+						foundCharacter = singleChars[wordVector[i]._char];
+					}
+					else {
+						foundCharacter = startChars[wordVector[i]._char];
+					}
+				}
+				else
+				{
+					if (i == wordVector.size() - 1)
+					{
+						foundCharacter = endChars[wordVector[i]._char];
+					}
+					else {
+						foundCharacter = middleChars[wordVector[i]._char];
+					}
+				}
+				if (foundCharacter != "") {
+					parsedWord += foundCharacter;
+				}
+				else
+				{
+					parsedWord += wordVector[i]._char;
+				}
 			}
 		}
 	}
 	return parsedWord;
+}
+
+std::string PersianLanguageSupport::convertUtf8CharacterVectorToString(const std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>& utf8StringCharacter)
+{
+	std::string parsedWord = "";
+	if (utf8StringCharacter.size() > 0) {
+		for (auto character : utf8StringCharacter) {
+			parsedWord += character._char;
+		}
+	}
+	return parsedWord;
+}
+
+std::string PersianLanguageSupport::emptyWordBuffer(std::stack<std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>>& wordBuffer)
+{
+	std::string text = "";
+	while (wordBuffer.size() > 0)
+	{
+		text += normalizeWord(wordBuffer.top());
+		wordBuffer.pop();
+	}
+	return text;
 }

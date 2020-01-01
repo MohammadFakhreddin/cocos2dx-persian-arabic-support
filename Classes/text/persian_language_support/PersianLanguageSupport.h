@@ -23,8 +23,10 @@ public:
 private:
 	PersianLanguageSupport();
 
-	bool isPersian(const std::string&);
-	std::string normalizeWord(const std::string&);
+	bool isPersian(const std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>&);
+	std::string normalizeWord(const std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>&);
+	std::string convertUtf8CharacterVectorToString(const std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>&);
+	std::string emptyWordBuffer(std::stack<std::vector<cocos2d::StringUtils::StringUTF8::CharUTF8>>&);
 
 	static PersianLanguageSupport* instance;
 	
