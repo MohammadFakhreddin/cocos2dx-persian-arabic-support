@@ -5,6 +5,8 @@ I'm currently working on solution for this issue. For persian language it is wor
 
 ## How to use
 
+Place res content in your res folder and place Classes content in your Classes then use it in the following way:
+
 ```
 //I recommend using this 
 PersianLanguageSupport::getInstance()->translateAndNormalize("text1");
@@ -40,7 +42,4 @@ auto label = Label::createWithTTF(
 ## Current bugs
 
 Because I don't understand Arabic , if you are willing to fix its Arabic support please contact me to guide you or submit your fix pull request. 
-
-For persian if you place punctuation near word it breaks its output.
-
 ## More update is coming to fix remaining issues
